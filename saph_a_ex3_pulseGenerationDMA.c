@@ -30,12 +30,18 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * --/COPYRIGHT--*/
 //******************************************************************************
-//   sdhs_ex1_8msps_sampling.c - SDHS sampling at 8MSPS and DTC transfer results to RAM
+//   MSP430FR60xx Demo - SDHS sampling at 8MSPS and DTC transfer results to RAM
 //
 //   Description: Configure the SDHS for stand-alone use (register mode) at 8MSPS.
-//   Use the DTC to transfer the results to an array in RAM.
+//   Use the DTC to transfer the results to an array in RAM named "results" (located
+//	 in LEA RAM at 0x5000). Convert array back to input voltage using: 
+//   V = (adc_code * (f_s/2))/(gain*7FF) + Bias
+//   where,adc_code is the ADC result(16-Bit Signed Int),f_s = .755V(Full-scale voltage),
+//   gain = 10^(0.1/20)) = approximately 1, Bias = .9V, 7FF = 2047 
 //
-//           MSP430FR6047
+//   ***NOTE: On TS-Board, remove JP14, put SIG on inner pin and GND to outer pin.
+//            Valid input range is 600mV - 1200mV, as configured.***
+//           MSP430FR6043
 //         ---------------
 //     /|\|               |
 //      | |               |
@@ -45,9 +51,10 @@
 //        |               |-USSXTOUT
 //        |         CH0_IN|<--- input signal
 //
-//   Wallace Tran
+//   Gary Gao & Matt Calvo
 //   Texas Instruments Inc.
-//   June 2017
+//   February 2018
+//   Built with IAR Embedded Workbench V7.10 & Code Composer Studio V7.3
 //******************************************************************************
 #include "driverlib.h"
 #include "sdhs.h"
@@ -183,7 +190,7 @@ void main (void)
     sdhsParam.triggerSourceSelect = SDHS_REGISTER_CONTROL_MODE;             // Trigger source select - SDHS_REGISTER_CONTROL_MODE
     //sdhsParam.msbShift = SDHS_NO_SHIFT;                                   // Selects MSB shift from filter out - SDHS_NO_SHIFT
     //sdhsParam.outputBitResolution = SDHS_OUTPUT_RESOLUTION_12_BIT;        // Selects the output bit resolution - SDHS_OUTPUT_RESOLUTION_12_BIT
-    sdhsParam.dataFormat = SDHS_DATA_FORMAT_TWOS_COMPLEMENT;                  // Select data format - SDHS_DATA_FORMAT_TWOS_COMPLEMENT
+    sdhsParam.dataFormat = SDHS_DATA_FORMAT_TWOS_COMPLEMENT;                // Select data format - SDHS_DATA_FORMAT_TWOS_COMPLEMENT
     sdhsParam.dataAlignment = SDHS_DATA_ALIGNED_LEFT;                       // Selects the data format - SDHS_DATA_ALIGNED_LEFT
     //sdhsParam.interruptDelayGeneration = SDHS_DELAY_SAMPLES_1 ;           // Selects the data format - SDHS_DELAY_SAMPLES_1
     sdhsParam.autoSampleStart = SDHS_AUTO_SAMPLE_START_DISABLED;            // Selects the Auto Sample Start - SDHS_AUTO_SAMPLE_START_DISABLED
@@ -238,10 +245,10 @@ void main (void)
     */
     while(1){
         //Enter LPM0 w/interrupts enabled
-        if (adc_data_ready) {
-        adc_data_ready = 0;  // Clear flag
-        display_adc_values(); // updates global variables for debug: voltage, adc_code, and current_ptr
-        }
+        // if (adc_data_ready) {
+        // adc_data_ready = 0;  // Clear flag
+        // display_adc_values(); // updates global variables for debug: voltage, adc_code, and current_ptr
+        // }
         __bis_SR_register(LPM0_bits | GIE);
         //For debugger
         __no_operation();
@@ -264,14 +271,14 @@ void __attribute__ ((interrupt(TIMER2_A1_VECTOR))) Timer2_A1_ISR(void)
 	case TAIV__NONE:   break;               	// No interrupt
 	case TAIV__TACCR1:
     	SDHS_endConversion(SDHS_BASE);
-        if(LEA_RAM_SDHS_RESET_FLAG){
-            LEA_RAM_SDHS_RESET_FLAG = 0;
-            SDHS_disable(SDHS_BASE);
-            SDHS_disableTrigger(SDHS_BASE);
-            SDHS_setDTCDestinationAddress(SDHS_BASE, 0);
-            SDHS_enableTrigger(SDHS_BASE);
-            SDHS_enable(SDHS_BASE);
-        }
+        // if(LEA_RAM_SDHS_RESET_FLAG){
+        //     LEA_RAM_SDHS_RESET_FLAG = 0;
+        //     SDHS_disable(SDHS_BASE);
+        //     SDHS_disableTrigger(SDHS_BASE);
+        //     SDHS_setDTCDestinationAddress(SDHS_BASE, 0);
+        //     SDHS_enableTrigger(SDHS_BASE);
+        //     SDHS_enable(SDHS_BASE);
+        // }
     	SDHS_startConversion(SDHS_BASE);   	    // Start conversion
     	break;
 	case TAIV__TAIFG: break;                	// overflow
@@ -305,7 +312,7 @@ void __attribute__ ((interrupt(SDHS_VECTOR))) SDHS_ISR(void)
 	case IIDX_6:   break;               	                // WINLO interrupt
 	default: break;
 	}
-    LPM0_EXIT; //exit LPM0 on exit to see results -- for debug
+    //LPM0_EXIT; //exit LPM0 on exit to see results -- for debug
 }
 
 // Timer A4 interrupt service routine -- Stabilize USSXT
